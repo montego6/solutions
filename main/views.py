@@ -9,31 +9,34 @@ from .blogic import CartManager, StripeSession, OrderCreator
 from .models import Item, Discount, Tax
 from .serializers import OrderSerializer, ItemSerializer
 
-stripe.api_key = config('STRIPE_KEY')
-
+stripe.api_key = config("STRIPE_KEY")
 
 
 def item_retrieve(request, id):
     item = get_object_or_404(Item, id=id)
     cart = CartManager.get_cart(request)
     cart_items = Item.objects.filter(id__in=cart)
-    return render(request, 'item.html', {
-        'item': item,
-        'cart_items': cart_items,
-        'stripe_key': config('STRIPE_PUBLISH_KEY')
-    })
+    return render(
+        request,
+        "item.html",
+        {
+            "item": item,
+            "cart_items": cart_items,
+            "stripe_key": config("STRIPE_PUBLISH_KEY"),
+        },
+    )
 
 
 def buy_success(request):
-    return render(request, 'success.html')
+    return render(request, "success.html")
 
 
 class BuyItemAPIView(APIView):
     def get(self, request, id):
         item = get_object_or_404(Item, id=id)
         items = ItemSerializer(item).data
-        session = StripeSession(request, items, item.currency, 'payment').create()
-        return Response({'id': session['id']}, status=status.HTTP_200_OK)
+        session = StripeSession(request, items, item.currency, "payment").create()
+        return Response({"id": session["id"]}, status=status.HTTP_200_OK)
 
 
 def add_to_order(request, id):
@@ -41,12 +44,12 @@ def add_to_order(request, id):
     if id not in cart:
         cart.append(id)
     CartManager.set_cart(request, cart)
-    return JsonResponse({'detail': f'{id} added to cart'}, status=status.HTTP_200_OK)
+    return JsonResponse({"detail": f"{id} added to cart"}, status=status.HTTP_200_OK)
 
 
 def clear_order(request):
     CartManager.clear_cart(request)
-    return JsonResponse({'detail': 'cart is cleared'}, status=status.HTTP_200_OK)
+    return JsonResponse({"detail": "cart is cleared"}, status=status.HTTP_200_OK)
 
 
 class MakeOrderAPIView(APIView):
@@ -58,7 +61,9 @@ class MakeOrderAPIView(APIView):
         cart = CartManager.get_cart(request)
         if cart:
             order = OrderCreator(cart, discount, tax).create()
-            items = OrderSerializer(order).data['items']
-            session = StripeSession(request, items, 'usd', 'payment', discount).create()
-            return Response({'id': session['id']}, status=status.HTTP_200_OK)
-        return Response({'detail': 'your cart is empty'}, status=status.HTTP_400_BAD_REQUEST)
+            items = OrderSerializer(order).data["items"]
+            session = StripeSession(request, items, "usd", "payment", discount).create()
+            return Response({"id": session["id"]}, status=status.HTTP_200_OK)
+        return Response(
+            {"detail": "your cart is empty"}, status=status.HTTP_400_BAD_REQUEST
+        )

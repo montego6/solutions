@@ -2,16 +2,19 @@ import stripe
 from django.urls import reverse
 from .models import Item, Order
 
+
 class CartManager:
     @staticmethod
     def get_cart(request):
-        return request.session.get('cart', [])
+        return request.session.get("cart", [])
+
     @staticmethod
     def clear_cart(request):
-        request.session['cart'] = []
+        request.session["cart"] = []
+
     @staticmethod
     def set_cart(request, cart):
-        request.session['cart'] = cart
+        request.session["cart"] = cart
 
 
 class StripeSession:
@@ -23,18 +26,18 @@ class StripeSession:
         self.discount = discount
 
     def create(self):
-        discount = {
-                'discounts': [{'coupon': self.discount.stripe}]
-            } if self.discount else {}
-        
+        discount = (
+            {"discounts": [{"coupon": self.discount.stripe}]} if self.discount else {}
+        )
+
         return stripe.checkout.Session.create(
-            success_url=self.request.build_absolute_uri(reverse('buy-success')),
+            success_url=self.request.build_absolute_uri(reverse("buy-success")),
             line_items=self.items,
             currency=self.currency,
             mode=self.mode,
-            **discount
+            **discount,
         )
-    
+
 
 class OrderCreator:
     def __init__(self, cart, discount, tax):
