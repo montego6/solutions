@@ -18,6 +18,8 @@ class Item(models.Model):
 
     def save(self, *args, **kwargs):
         product = stripe.Product.create(name=self.name)
+        # Тут должна быть какая-то логика по установке цен в разных валютах, в решении
+        # для простоты хардкодится коэффициент конверсии
         if self.currency == self.Currency.usd:
             currency_options = \
                 {'eur': {'unit_amount': int(self.price * 0.93 * 100)}}

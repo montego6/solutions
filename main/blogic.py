@@ -24,8 +24,9 @@ class StripeSession:
 
     def create(self):
         discount = {
-                'discounts': discount.stripe
+                'discounts': [{'coupon': self.discount.stripe}]
             } if self.discount else {}
+        
         return stripe.checkout.Session.create(
             success_url=self.request.build_absolute_uri(reverse('buy-success')),
             line_items=self.items,

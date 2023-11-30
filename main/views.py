@@ -1,22 +1,21 @@
 import stripe
 from decouple import config
 from django.shortcuts import render, get_object_or_404
-from django.urls import reverse
 from django.http import JsonResponse
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from blogic import CartManager, StripeSession, OrderCreator
-from .models import Item, Order, Discount, Tax
+from .blogic import CartManager, StripeSession, OrderCreator
+from .models import Item, Discount, Tax
 from .serializers import OrderSerializer, ItemSerializer
 
 stripe.api_key = config('STRIPE_KEY')
 
 
-# Create your views here.
 
 def item_retrieve(request, id):
     item = get_object_or_404(Item, id=id)
-    cart = CartManager.get_cart()
+    cart = CartManager.get_cart(request)
     cart_items = Item.objects.filter(id__in=cart)
     return render(request, 'item.html', {
         'item': item,
@@ -33,61 +32,33 @@ class BuyItemAPIView(APIView):
     def get(self, request, id):
         item = get_object_or_404(Item, id=id)
         items = ItemSerializer(item).data
-        stripe_session = StripeSession(request, items, item.currency, 'payment')
-        session = stripe_session.create()
-        # session = stripe.checkout.Session.create(
-        #     success_url=request.build_absolute_uri(reverse('buy-success')),
-        #     line_items=[line_items],
-        #     currency=item.currency,
-        #     mode="payment",
-        # )
-        return Response({'id': session['id']})
+        session = StripeSession(request, items, item.currency, 'payment').create()
+        return Response({'id': session['id']}, status=status.HTTP_200_OK)
 
 
 def add_to_order(request, id):
-    cart = CartManager.get_cart()
+    cart = CartManager.get_cart(request)
     if id not in cart:
         cart.append(id)
-    CartManager.set_cart(cart)
-    return JsonResponse({'status': f'{id} added to cart'})
+    CartManager.set_cart(request, cart)
+    return JsonResponse({'detail': f'{id} added to cart'}, status=status.HTTP_200_OK)
 
 
 def clear_order(request):
-    CartManager.clear_cart()
-    return JsonResponse({'status': 'cart is cleared'})
+    CartManager.clear_cart(request)
+    return JsonResponse({'detail': 'cart is cleared'}, status=status.HTTP_200_OK)
 
 
 class MakeOrderAPIView(APIView):
     def get(self, request):
-        # Тут должна быть какая-то логика, по прикреплению скидки к заказу,
-        # в данном случаем просто выбирается первый объект из таблицы Discount
+        # Тут должна быть какая-то логика, по прикреплению скидки и налога к заказу,
+        # в данном случаем просто выбирается первый объект из таблицы Discount и Tax
         discount = Discount.objects.first()
         tax = Tax.objects.first()
-        cart = CartManager.get_cart()
+        cart = CartManager.get_cart(request)
         if cart:
-            # items = Item.objects.filter(id__in=cart)
-            # order = Order.objects.create()
-            # order.items.add(*items)
-            # order.discount = discount
-            # # Налог так же выбирается - просто первый объект из таблицы Tax
-            # order.tax = Tax.objects.first()
-            # order.save()
-            order_creation = OrderCreator(cart, discount, tax)
-            order = order_creation.create()
+            order = OrderCreator(cart, discount, tax).create()
             items = OrderSerializer(order).data['items']
-
-            stripe_session = StripeSession(request, items, 'usd', 'payment', discount)
-            session = stripe_session.create()
-            # kwargs = {
-            #     'success_url':
-            #         request.build_absolute_uri(reverse('buy-success')),
-            #     'line_items': line_items.data['items'],
-            #     'currency': 'usd', # По умолчанию валюта для заказов доллары
-            #     'mode': "payment",
-            # }
-            # if order.discount:
-            #     kwargs['discounts'] = [{'coupon': order.discount.stripe}]
-
-            # session = stripe.checkout.Session.create(**kwargs)
-            return Response({'id': session['id']})
-        return Response({'error': 'your cart is empty'})
+            session = StripeSession(request, items, 'usd', 'payment', discount).create()
+            return Response({'id': session['id']}, status=status.HTTP_200_OK)
+        return Response({'detail': 'your cart is empty'}, status=status.HTTP_400_BAD_REQUEST)
