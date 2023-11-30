@@ -18,15 +18,14 @@ class Item(models.Model):
 
     def save(self, *args, **kwargs):
         product = stripe.Product.create(name=self.name)
-        if self.currency.lower() == 'usd':
+        if self.currency == self.Currency.usd:
             currency_options = \
                 {'eur': {'unit_amount': int(self.price * 0.93 * 100)}}
-        elif self.currency.lower() == 'eur':
+        elif self.currency == self.Currency.eur:
             currency_options = \
                 {'usd': {'unit_amount': int(self.price * 1.07 * 100)}}
         else:
             currency_options = {}
-
         price = stripe.Price.create(
             unit_amount=int(self.price * 100),
             currency=self.currency,
