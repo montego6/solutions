@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.http import JsonResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from blogic import CartManager, StripeSession
+from blogic import CartManager, StripeSession, OrderCreator
 from .models import Item, Order, Discount, Tax
 from .serializers import OrderSerializer, ItemSerializer
 
@@ -32,8 +32,8 @@ def buy_success(request):
 class BuyItemAPIView(APIView):
     def get(self, request, id):
         item = get_object_or_404(Item, id=id)
-        line_items = ItemSerializer(item).data
-        stripe_session = StripeSession(request, line_items, item.currency, 'payment')
+        items = ItemSerializer(item).data
+        stripe_session = StripeSession(request, items, item.currency, 'payment')
         session = stripe_session.create()
         # session = stripe.checkout.Session.create(
         #     success_url=request.build_absolute_uri(reverse('buy-success')),
@@ -62,27 +62,32 @@ class MakeOrderAPIView(APIView):
         # Тут должна быть какая-то логика, по прикреплению скидки к заказу,
         # в данном случаем просто выбирается первый объект из таблицы Discount
         discount = Discount.objects.first()
+        tax = Tax.objects.first()
         cart = CartManager.get_cart()
         if cart:
-            items = Item.objects.filter(id__in=cart)
-            order = Order.objects.create()
-            order.items.add(*items)
-            order.discount = discount
-            # Налог так же выбирается - просто первый объект из таблицы Tax
-            order.tax = Tax.objects.first()
-            order.save()
-            line_items = OrderSerializer(order)
+            # items = Item.objects.filter(id__in=cart)
+            # order = Order.objects.create()
+            # order.items.add(*items)
+            # order.discount = discount
+            # # Налог так же выбирается - просто первый объект из таблицы Tax
+            # order.tax = Tax.objects.first()
+            # order.save()
+            order_creation = OrderCreator(cart, discount, tax)
+            order = order_creation.create()
+            items = OrderSerializer(order).data['items']
 
-            kwargs = {
-                'success_url':
-                    request.build_absolute_uri(reverse('buy-success')),
-                'line_items': line_items.data['items'],
-                'currency': 'usd', # По умолчанию валюта для заказов доллары
-                'mode': "payment",
-            }
-            if order.discount:
-                kwargs['discounts'] = [{'coupon': order.discount.stripe}]
+            stripe_session = StripeSession(request, items, 'usd', 'payment', discount)
+            session = stripe_session.create()
+            # kwargs = {
+            #     'success_url':
+            #         request.build_absolute_uri(reverse('buy-success')),
+            #     'line_items': line_items.data['items'],
+            #     'currency': 'usd', # По умолчанию валюта для заказов доллары
+            #     'mode': "payment",
+            # }
+            # if order.discount:
+            #     kwargs['discounts'] = [{'coupon': order.discount.stripe}]
 
-            session = stripe.checkout.Session.create(**kwargs)
+            # session = stripe.checkout.Session.create(**kwargs)
             return Response({'id': session['id']})
         return Response({'error': 'your cart is empty'})
