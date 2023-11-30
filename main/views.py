@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.http import JsonResponse
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from blogic import CartManager
+from blogic import CartManager, StripeSession
 from .models import Item, Order, Discount, Tax
 from .serializers import OrderSerializer, ItemSerializer
 
@@ -31,27 +31,29 @@ def buy_success(request):
 
 class BuyItemAPIView(APIView):
     def get(self, request, id):
-        item = Item.objects.get(id=id)
+        item = get_object_or_404(Item, id=id)
         line_items = ItemSerializer(item).data
-        session = stripe.checkout.Session.create(
-            success_url=request.build_absolute_uri(reverse('buy-success')),
-            line_items=[line_items],
-            currency=item.currency,
-            mode="payment",
-        )
+        stripe_session = StripeSession(request, line_items, item.currency, 'payment')
+        session = stripe_session.create()
+        # session = stripe.checkout.Session.create(
+        #     success_url=request.build_absolute_uri(reverse('buy-success')),
+        #     line_items=[line_items],
+        #     currency=item.currency,
+        #     mode="payment",
+        # )
         return Response({'id': session['id']})
 
 
 def add_to_order(request, id):
-    cart = request.session.get('cart', [])
+    cart = CartManager.get_cart()
     if id not in cart:
         cart.append(id)
-    request.session['cart'] = cart
+    CartManager.set_cart(cart)
     return JsonResponse({'status': f'{id} added to cart'})
 
 
 def clear_order(request):
-    request.session['cart'] = []
+    CartManager.clear_cart()
     return JsonResponse({'status': 'cart is cleared'})
 
 
@@ -60,7 +62,7 @@ class MakeOrderAPIView(APIView):
         # Тут должна быть какая-то логика, по прикреплению скидки к заказу,
         # в данном случаем просто выбирается первый объект из таблицы Discount
         discount = Discount.objects.first()
-        cart = request.session.get('cart', [])
+        cart = CartManager.get_cart()
         if cart:
             items = Item.objects.filter(id__in=cart)
             order = Order.objects.create()

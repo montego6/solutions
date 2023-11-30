@@ -1,4 +1,5 @@
 import stripe
+from django.urls import reverse
 
 class CartManager:
     @staticmethod
@@ -7,19 +8,29 @@ class CartManager:
     @staticmethod
     def clear_cart(request):
         request.session['cart'] = []
+    @staticmethod
+    def set_cart(request, cart):
+        request.session['cart'] = cart
 
 
 class StripeSession:
     def __init__(self, request, items, currency, mode) -> None:
         self.request = request
-        self.items = items
+        self.items = items if isinstance(items, list) else [items]
         self.currency = currency
         self.mode = mode
 
     def create(self):
         return stripe.checkout.Session.create(
-            success_url=request.build_absolute_uri(reverse('buy-success')),
-            line_items=[line_items],
-            currency=item.currency,
-            mode="payment",
+            success_url=self.request.build_absolute_uri(reverse('buy-success')),
+            line_items=self.items,
+            currency=self.currency,
+            mode=self.mode,
         )
+    
+
+class OrderCreator:
+    def __init__(self, cart, discount, tax):
+        self.cart = cart
+        self.discount = discount
+        self.tax = tax
