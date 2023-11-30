@@ -1,12 +1,13 @@
+import stripe
+from decouple import config
 from django.shortcuts import render, get_object_or_404
 from django.urls import reverse
 from django.http import JsonResponse
-from .models import Item, Order, Discount, Tax
-from .serializers import OrderSerializer, ItemSerializer
-import stripe
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from decouple import config
+from blogic import CartManager
+from .models import Item, Order, Discount, Tax
+from .serializers import OrderSerializer, ItemSerializer
 
 stripe.api_key = config('STRIPE_KEY')
 
@@ -15,7 +16,7 @@ stripe.api_key = config('STRIPE_KEY')
 
 def item_retrieve(request, id):
     item = get_object_or_404(Item, id=id)
-    cart = request.session.get('cart', [])
+    cart = CartManager.get_cart()
     cart_items = Item.objects.filter(id__in=cart)
     return render(request, 'item.html', {
         'item': item,
@@ -35,7 +36,7 @@ class BuyItemAPIView(APIView):
         session = stripe.checkout.Session.create(
             success_url=request.build_absolute_uri(reverse('buy-success')),
             line_items=[line_items],
-            currency=item.currency.lower(),
+            currency=item.currency,
             mode="payment",
         )
         return Response({'id': session['id']})
